@@ -41,6 +41,8 @@ class HAProxyCollector(diamond.collector.Collector):
             'user':             'admin',
             'pass':             'password',
             'ignore_servers':   False,
+            'metric_include':   [],
+            'metric_exclude':   []
         })
         return config
 
@@ -52,6 +54,12 @@ class HAProxyCollector(diamond.collector.Collector):
             return self.config[section].get(key, self.config[key])
         else:
             return self.config[key]
+
+    def _get_config_list(self, section, key):
+        val = self._get_config_value(section, key)
+        if not isinstance(val, list):
+            return [val]
+        return val
 
     def get_csv_data(self, section=None):
         """
@@ -119,6 +127,9 @@ class HAProxyCollector(diamond.collector.Collector):
         headings = self._generate_headings(data[0])
         section_name = section and self._sanitize(section.lower()) + '.' or ''
 
+        metric_include = self._get_config_list(section, 'metric_include')
+        metric_exclude = self._get_config_list(section, 'metric_exclude')
+
         for row in data:
             if (self._get_config_value(section, 'ignore_servers')
                     and row[1].lower() not in ['frontend', 'backend']):
@@ -129,6 +140,11 @@ class HAProxyCollector(diamond.collector.Collector):
             metric_name = '%s%s.%s' % (section_name, part_one, part_two)
 
             for index, metric_string in enumerate(row):
+                if metric_include:
+                    if headings[index] not in metric_include:
+                        continue
+                elif metric_exclude and headings[index] in metric_exclude:
+                    continue
                 try:
                     metric_value = float(metric_string)
                 except ValueError:
